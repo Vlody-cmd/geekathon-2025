@@ -91,11 +91,20 @@ const initializeMap = async () => {
     // Add markers if provided
     if (props.markers) {
       props.markers.forEach(markerData => {
+        // Convert icon anchor from object to Point if needed
+        let icon = markerData.icon
+        if (icon && typeof icon === 'object' && 'anchor' in icon && icon.anchor && 'x' in icon.anchor) {
+          icon = {
+            ...icon,
+            anchor: new google.maps.Point(icon.anchor.x, icon.anchor.y)
+          }
+        }
+
         const marker = new google.maps.Marker({
           position: markerData.position,
           map: map.value,
           title: markerData.title,
-          icon: markerData.icon,
+          icon: icon,
           animation: google.maps.Animation.DROP
         })
 
