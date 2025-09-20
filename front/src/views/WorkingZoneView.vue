@@ -329,36 +329,94 @@ const loads = computed(() => {
   return truckLoads[selectedTruck.value.id] || []
 })
 
+// Format truck status for display
+const formatTruckStatus = (status: TruckDetails['status']) => {
+  return status
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
 // Update routes and markers when loads change
 const updateRoutesAndMarkers = () => {
   const routes = []
   const markers = []
   
-  for (const load of loads.value) {
-    if (load.fromLocation && load.toLocation) {
-      // Add route
-      routes.push({
-        origin: load.fromLocation,
-        destination: load.toLocation,
-        // Different colors based on urgency
-        color: load.urgent ? '#DC2626' : '#2563EB'
-      })
-      
-      // Add begin marker
-      markers.push({
-        position: load.fromLocation,
-        title: `Pickup: ${load.from}`,
-        icon: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
-        info: `<div class="p-3"><strong>Start Point:</strong> ${load.from}</div>`
-      })
-      
-      // Add end marker
-      markers.push({
-        position: load.toLocation,
-        title: `Delivery: ${load.to}`,
-        icon: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
-        info: `<div class="p-3"><strong>End Point:</strong> ${load.to}</div>`
-      })
+  // Always show the truck's current location
+  if (selectedTruck.value?.currentLocation) {
+    const truckColor = selectedTruck.value.status === 'available' 
+      ? '00C853' // green
+      : selectedTruck.value.status === 'in_transit' 
+        ? '2196F3' // blue
+        : 'FFC107'; // yellow/amber for maintenance
+
+    const truckIcon = {
+      path: 'M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z',
+      fillColor: '#' + truckColor,
+      fillOpacity: 1,
+      strokeColor: '#263238',
+      strokeWeight: 1,
+      scale: 1.5,
+      anchor: { x: 12, y: 12 }
+    }
+
+    markers.push({
+      position: selectedTruck.value.currentLocation,
+      title: `${selectedTruck.value.model} - ${selectedTruck.value.licensePlate}`,
+      icon: truckIcon,
+      info: `
+        <div class="p-3">
+          <h3 class="font-bold text-gray-900">${selectedTruck.value.model}</h3>
+          <p class="text-sm text-gray-600">${selectedTruck.value.licensePlate}</p>
+          <div class="mt-2 space-y-1">
+            <div class="flex items-center">
+              <span class="text-gray-500 w-20 text-sm">Status:</span>
+              <span class="text-sm font-medium ${
+                selectedTruck.value.status === 'available' 
+                  ? 'text-green-600' 
+                  : selectedTruck.value.status === 'in_transit' 
+                    ? 'text-blue-600' 
+                    : 'text-yellow-600'
+              }">${formatTruckStatus(selectedTruck.value.status)}</span>
+            </div>
+            <div class="flex items-center">
+              <span class="text-gray-500 w-20 text-sm">Location:</span>
+              <span class="text-sm">${selectedTruck.value.currentLocation.address}</span>
+            </div>
+          </div>
+        </div>
+      `
+    })
+  }
+
+  // Only show routes and delivery markers if truck is in_transit
+  if (selectedTruck.value?.status === 'in_transit') {
+    for (const load of loads.value) {
+      if (load.fromLocation && load.toLocation) {
+        // Add route
+        routes.push({
+          origin: load.fromLocation,
+          destination: load.toLocation,
+          // Different colors based on urgency
+          color: load.urgent ? '#DC2626' : '#2563EB'
+        })
+        
+        // Add begin marker
+        markers.push({
+          position: load.fromLocation,
+          title: `Pickup: ${load.from}`,
+          icon: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
+          info: `<div class="p-3"><strong>Start Point:</strong> ${load.from}</div>`
+        })
+        
+        // Add end marker
+        markers.push({
+          position: load.toLocation,
+          title: `Delivery: ${load.to}`,
+          icon: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
+          info: `<div class="p-3"><strong>End Point:</strong> ${load.to}</div>`
+        })
+      }
     }
   }
   
@@ -366,8 +424,8 @@ const updateRoutesAndMarkers = () => {
   deliveryRoutes.value = routes
 }
 
-// Watch for changes in loads and update markers/routes
-watch(loads, updateRoutesAndMarkers, { immediate: true })
+// Watch for changes in loads or truck status and update markers/routes
+watch([loads, selectedTruck], updateRoutesAndMarkers, { immediate: true })
 
 // Calculate a position along the route
 const calculateRoutePosition = async (fromLoc: Location, toLoc: Location) => {
@@ -522,12 +580,5 @@ const assignLoad = (load: Load) => {
 const handleChatMessage = (message: string) => {
   console.log('Sending message:', message)
   // Implement chat message handling here
-}
-
-const formatTruckStatus = (status: TruckDetails['status']) => {
-  return status
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ')
 }
 </script>
