@@ -41,16 +41,16 @@
 
     <div class="mt-4 flex justify-end space-x-2">
       <button
-        class="px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-        @click="$emit('view-details', truck.id)"
+        class="px-4 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-md transition-colors font-medium"
+        @click="$emit('go-to-working-zone', truck.id)"
       >
-        View Details
+        Working Zone
       </button>
       <button
         class="px-3 py-1 text-sm text-gray-600 hover:bg-gray-50 rounded-md transition-colors"
         @click="$emit('view-maintenance', truck.id)"
       >
-        Maintenance Log
+        Maintenance
       </button>
     </div>
   </div>
@@ -65,7 +65,7 @@ const props = defineProps<{
 }>()
 
 defineEmits<{
-  (e: 'view-details', id: string): void
+  (e: 'go-to-working-zone', id: string): void
   (e: 'view-maintenance', id: string): void
 }>()
 
@@ -84,9 +84,10 @@ const statusClasses = computed(() => {
 })
 
 const formatStatus = (status: TruckDetails['status']) => {
-  return status.split('_').map(word => 
-    word.charAt(0).toUpperCase() + word.slice(1)
-  ).join(' ')
+  return status
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
 }
 
 const formatMileage = (mileage: number) => {

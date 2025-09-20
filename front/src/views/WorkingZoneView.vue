@@ -1,5 +1,51 @@
 <template>
   <div class="min-h-[calc(100vh-4rem)] bg-gray-50">
+    <!-- Truck Information Header -->
+    <div v-if="selectedTruck" class="bg-white shadow-sm border-b">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-4">
+            <button
+              @click="router.push('/trucks')"
+              class="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M15 19l-7-7 7-7"
+                />
+              </svg>
+            </button>
+            <div>
+              <h1 class="text-2xl font-bold text-gray-900">{{ selectedTruck.model }}</h1>
+              <p class="text-sm text-gray-600">
+                {{ selectedTruck.licensePlate }} • {{ selectedTruck.capacity }}
+              </p>
+            </div>
+          </div>
+          <div class="flex items-center space-x-4">
+            <div
+              :class="[
+                'px-3 py-1 rounded-full text-sm font-medium',
+                selectedTruck.status === 'available'
+                  ? 'bg-green-100 text-green-800'
+                  : selectedTruck.status === 'in_transit'
+                    ? 'bg-blue-100 text-blue-800'
+                    : 'bg-yellow-100 text-yellow-800',
+              ]"
+            >
+              {{ formatTruckStatus(selectedTruck.status) }}
+            </div>
+            <div class="text-sm text-gray-600">
+              <span class="font-medium">{{ selectedTruck.currentLocation?.address }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="flex h-full">
       <!-- Left side - Map -->
       <div class="w-2/3 p-4">
@@ -21,7 +67,10 @@
       <!-- Right side - Loads and Chat -->
       <div class="w-1/3 p-4 relative">
         <!-- Loads Panel -->
-        <div v-if="!isChatOpen" class="bg-white rounded-lg shadow-lg h-[calc(100vh-6rem)] overflow-hidden flex flex-col">
+        <div
+          v-if="!isChatOpen"
+          class="bg-white rounded-lg shadow-lg h-[calc(100vh-6rem)] overflow-hidden flex flex-col"
+        >
           <div class="p-4 border-b">
             <h2 class="text-xl font-semibold text-gray-900">Available Loads</h2>
             <div class="mt-2 flex gap-2">
@@ -58,7 +107,7 @@
                 <span
                   :class="[
                     'px-2 py-1 text-xs font-medium rounded-full',
-                    load.urgent ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                    load.urgent ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800',
                   ]"
                 >
                   {{ load.urgent ? 'Urgent' : 'Regular' }}
@@ -135,8 +184,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useUserStore } from '@/stores/user'
 import ChatInterface from '@/components/chat/ChatInterface.vue'
+import type { TruckDetails } from '@/stores/user'
 
 interface Load {
   id: string
@@ -148,8 +200,29 @@ interface Load {
   urgent: boolean
 }
 
+const route = useRoute()
+const router = useRouter()
+const userStore = useUserStore()
+
 const searchQuery = ref('')
 const isChatOpen = ref(false)
+
+// Get the selected truck based on route parameter
+const selectedTruck = computed(() => {
+  const truckId = route.params.truckId as string
+  if (!truckId) return null
+  return userStore.user.trucks.find((truck) => truck.id === truckId) || null
+})
+
+// Redirect to truck list if no truck is selected or truck not found
+onMounted(() => {
+  if (!route.params.truckId) {
+    router.push('/trucks')
+  } else if (!selectedTruck.value) {
+    console.error('Truck not found:', route.params.truckId)
+    router.push('/trucks')
+  }
+})
 
 const loads = ref<Load[]>([
   {
@@ -159,7 +232,7 @@ const loads = ref<Load[]>([
     from: 'Kyiv, Ukraine',
     to: 'Lviv, Ukraine',
     distance: 540,
-    urgent: true
+    urgent: true,
   },
   {
     id: '2',
@@ -168,7 +241,7 @@ const loads = ref<Load[]>([
     from: 'Odesa, Ukraine',
     to: 'Kharkiv, Ukraine',
     distance: 830,
-    urgent: false
+    urgent: false,
   },
   {
     id: '3',
@@ -177,8 +250,8 @@ const loads = ref<Load[]>([
     from: 'Dnipro, Ukraine',
     to: 'Warsaw, Poland',
     distance: 1250,
-    urgent: true
-  }
+    urgent: true,
+  },
 ])
 
 const filterLoads = () => {
@@ -194,5 +267,12 @@ const assignLoad = (load: Load) => {
 const handleChatMessage = (message: string) => {
   console.log('Sending message:', message)
   // Implement chat message handling here
+}
+
+const formatTruckStatus = (status: TruckDetails['status']) => {
+  return status
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
 }
 </script>

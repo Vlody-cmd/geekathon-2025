@@ -12,31 +12,36 @@ const router = createRouter({
         {
           path: '',
           name: 'home',
-          component: HomeView
+          component: HomeView,
         },
         {
-          path: 'working-zone',
+          path: 'trucks',
+          name: 'trucks',
+          component: () => import('../views/TruckListView.vue'),
+        },
+        {
+          path: 'working-zone/:truckId?',
           name: 'working-zone',
-          component: () => import('../views/WorkingZoneView.vue')
+          component: () => import('../views/WorkingZoneView.vue'),
         },
         {
           path: 'about',
           name: 'about',
-          component: () => import('../views/AboutView.vue')
+          component: () => import('../views/AboutView.vue'),
         },
         {
           path: 'profile',
           name: 'profile',
-          component: () => import('../views/ProfileView.vue')
+          component: () => import('../views/ProfileView.vue'),
         },
         {
           path: 'settings',
           name: 'settings',
-          component: () => import('../views/ProfileView.vue') // Reusing ProfileView for now
-        }
-      ]
-    }
-  ]
+          component: () => import('../views/ProfileView.vue'), // Reusing ProfileView for now
+        },
+      ],
+    },
+  ],
 })
 
 export default router

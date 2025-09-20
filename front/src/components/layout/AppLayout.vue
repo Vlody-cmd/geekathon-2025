@@ -35,7 +35,8 @@ import UserAvatar from '@/components/user/UserAvatar.vue'
 
 const navigationItems = [
   { name: 'Home', path: '/' },
+  { name: 'My Trucks', path: '/trucks' },
   { name: 'Working Zone', path: '/working-zone' },
-  { name: 'About', path: '/about' }
+  { name: 'About', path: '/about' },
 ]
 </script>
