@@ -15,6 +15,11 @@ const router = createRouter({
           component: HomeView
         },
         {
+          path: 'working-zone',
+          name: 'working-zone',
+          component: () => import('../views/WorkingZoneView.vue')
+        },
+        {
           path: 'about',
           name: 'about',
           component: () => import('../views/AboutView.vue')
