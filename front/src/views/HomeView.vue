@@ -130,10 +130,10 @@ import GoogleMap from '@/components/map/GoogleMap.vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 
-// Center the map on Ukraine
+// Center the map on Portugal
 const mapCenter = ref({
-  lat: 49.0384,
-  lng: 31.4513
+  lat: 39.5,
+  lng: -8.8
 })
 
 const router = useRouter()
