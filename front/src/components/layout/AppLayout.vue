@@ -17,6 +17,7 @@
             >
               {{ item.name }}
             </router-link>
+            <UserAvatar />
           </div>
         </div>
       </div>
@@ -29,6 +30,9 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted, onUnmounted } from 'vue'
+import UserAvatar from '@/components/user/UserAvatar.vue'
+
 const navigationItems = [
   { name: 'Home', path: '/' },
   { name: 'About', path: '/about' }

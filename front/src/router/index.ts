@@ -18,6 +18,16 @@ const router = createRouter({
           path: 'about',
           name: 'about',
           component: () => import('../views/AboutView.vue')
+        },
+        {
+          path: 'profile',
+          name: 'profile',
+          component: () => import('../views/ProfileView.vue')
+        },
+        {
+          path: 'settings',
+          name: 'settings',
+          component: () => import('../views/ProfileView.vue') // Reusing ProfileView for now
         }
       ]
     }
