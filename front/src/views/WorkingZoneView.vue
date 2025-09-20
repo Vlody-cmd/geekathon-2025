@@ -213,28 +213,26 @@ const searchQuery = ref('')
 const isChatOpen = ref(false)
 const selectedLoad = ref<Load | null>(null)
 const deliveryMarkers = ref([])
+const deliveryRoutes = ref([])
 
-// Define marker icons
-const markerIcons = {
-  begin: {
-    path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z',
-    fillColor: '#4CAF50',
-    fillOpacity: 1,
-    strokeWeight: 1,
-    strokeColor: '#1F2937',
-    scale: 1.5,
-    anchor: new google.maps.Point(12, 22)
-  },
-  end: {
-    path: 'M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zM4 6h16v2H4V6zm0 12v-6h16v6H4z',
-    fillColor: '#F44336',
-    fillOpacity: 1,
-    strokeWeight: 1,
-    strokeColor: '#1F2937',
-    scale: 1.5,
-    anchor: new google.maps.Point(12, 12)
-  }
+// Load Google Maps API
+const loadGoogleMapsAPI = () => {
+  return new Promise<void>((resolve, reject) => {
+    if (window.google?.maps) {
+      resolve()
+      return
+    }
+
+    const script = document.createElement('script')
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&libraries=places,geometry`
+    script.async = true
+    script.defer = true
+    script.addEventListener('load', () => resolve())
+    script.addEventListener('error', e => reject(e))
+    document.head.appendChild(script)
+  })
 }
+
 
 // Get the selected truck based on route parameter
 const selectedTruck = computed(() => {
@@ -331,8 +329,8 @@ const loads = computed(() => {
   return truckLoads[selectedTruck.value.id] || []
 })
 
-// Generate routes and markers for each load
-const deliveryRoutes = computed(() => {
+// Update routes and markers when loads change
+const updateRoutesAndMarkers = () => {
   const routes = []
   const markers = []
   
@@ -350,7 +348,7 @@ const deliveryRoutes = computed(() => {
       markers.push({
         position: load.fromLocation,
         title: `Pickup: ${load.from}`,
-        icon: markerIcons.begin,
+        icon: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
         info: `<div class="p-3"><strong>Start Point:</strong> ${load.from}</div>`
       })
       
@@ -358,33 +356,18 @@ const deliveryRoutes = computed(() => {
       markers.push({
         position: load.toLocation,
         title: `Delivery: ${load.to}`,
-        icon: markerIcons.end,
+        icon: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
         info: `<div class="p-3"><strong>End Point:</strong> ${load.to}</div>`
       })
     }
   }
   
   deliveryMarkers.value = markers
-  return routes
-})
-
-// Load Google Maps API
-const loadGoogleMapsAPI = () => {
-  return new Promise<void>((resolve, reject) => {
-    if (window.google?.maps) {
-      resolve()
-      return
-    }
-
-    const script = document.createElement('script')
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&libraries=places,geometry`
-    script.async = true
-    script.defer = true
-    script.addEventListener('load', () => resolve())
-    script.addEventListener('error', e => reject(e))
-    document.head.appendChild(script)
-  })
+  deliveryRoutes.value = routes
 }
+
+// Watch for changes in loads and update markers/routes
+watch(loads, updateRoutesAndMarkers, { immediate: true })
 
 // Calculate a position along the route
 const calculateRoutePosition = async (fromLoc: Location, toLoc: Location) => {
