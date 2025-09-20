@@ -181,7 +181,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import ChatInterface from '@/components/chat/ChatInterface.vue'
@@ -212,7 +212,7 @@ const userStore = useUserStore()
 const searchQuery = ref('')
 const isChatOpen = ref(false)
 const selectedLoad = ref<Load | null>(null)
-const mapCenter = ref<Location>({ lat: 50.4501, lng: 30.5234 }) // Kyiv center
+const deliveryMarkers = ref([])
 
 // Get the selected truck based on route parameter
 const selectedTruck = computed(() => {
@@ -221,61 +221,93 @@ const selectedTruck = computed(() => {
   return userStore.user.trucks.find((truck) => truck.id === truckId) || null
 })
 
+// Center map on selected truck's location
+const mapCenter = computed(() => {
+  if (selectedTruck.value?.currentLocation) {
+    return {
+      lat: selectedTruck.value.currentLocation.lat,
+      lng: selectedTruck.value.currentLocation.lng
+    }
+  }
+  // Default to central Portugal if no truck selected
+  return { lat: 39.5, lng: -8.8 }
+})
+
 // Redirect to truck list if no truck is selected or truck not found
-onMounted(() => {
+onMounted(async () => {
   if (!route.params.truckId) {
     router.push('/trucks')
   } else if (!selectedTruck.value) {
     console.error('Truck not found:', route.params.truckId)
     router.push('/trucks')
+  } else {
+    await updateMarkers()
+    // Update markers periodically
+    const interval = setInterval(updateMarkers, 10000)
+    onUnmounted(() => clearInterval(interval))
   }
 })
 
-// City coordinates
+// Portuguese city coordinates
 const cityCoordinates = {
-  kyiv: { lat: 50.4501, lng: 30.5234 },
-  lviv: { lat: 49.8397, lng: 24.0297 },
-  odesa: { lat: 46.4825, lng: 30.7233 },
-  kharkiv: { lat: 49.9935, lng: 36.2304 },
-  dnipro: { lat: 48.4647, lng: 35.0462 },
-  warsaw: { lat: 52.2297, lng: 21.0122 }
+  braga: { lat: 41.5517, lng: -8.4265 },
+  porto: { lat: 41.1579, lng: -8.6291 },
+  viseu: { lat: 40.6566, lng: -7.9125 },
+  coimbra: { lat: 40.2033, lng: -8.4103 },
+  lisboa: { lat: 38.7223, lng: -9.1393 },
+  setubal: { lat: 38.5244, lng: -8.8882 },
+  beja: { lat: 38.0333, lng: -7.8833 },
+  faro: { lat: 37.0193, lng: -7.9304 }
 } as const
 
-const loads = ref<Load[]>([
-  {
-    id: '1',
-    type: 'Electronics',
-    weight: 15,
-    from: 'Kyiv, Ukraine',
-    to: 'Lviv, Ukraine',
-    distance: 540,
-    urgent: true,
-    fromLocation: cityCoordinates.kyiv,
-    toLocation: cityCoordinates.lviv
-  },
-  {
-    id: '2',
-    type: 'Construction Materials',
-    weight: 25,
-    from: 'Odesa, Ukraine',
-    to: 'Kharkiv, Ukraine',
-    distance: 830,
-    urgent: false,
-    fromLocation: cityCoordinates.odesa,
-    toLocation: cityCoordinates.kharkiv
-  },
-  {
-    id: '3',
-    type: 'Food Products',
-    weight: 18,
-    from: 'Dnipro, Ukraine',
-    to: 'Warsaw, Poland',
-    distance: 1250,
-    urgent: true,
-    fromLocation: cityCoordinates.dnipro,
-    toLocation: cityCoordinates.warsaw
-  }
-])
+// Truck-specific loads based on truck ID
+const truckLoads = {
+  'T-001': [
+    {
+      id: '1',
+      type: 'Electronics',
+      weight: 15,
+      from: 'Braga, Portugal',
+      to: 'Porto, Portugal',
+      distance: 55,
+      urgent: true,
+      fromLocation: cityCoordinates.braga,
+      toLocation: cityCoordinates.porto
+    }
+  ],
+  'T-002': [
+    {
+      id: '2',
+      type: 'Construction Materials',
+      weight: 25,
+      from: 'Viseu, Portugal',
+      to: 'Coimbra, Portugal',
+      distance: 95,
+      urgent: false,
+      fromLocation: cityCoordinates.viseu,
+      toLocation: cityCoordinates.coimbra
+    }
+  ],
+  'T-003': [
+    {
+      id: '3',
+      type: 'Food Products',
+      weight: 18,
+      from: 'Lisboa, Portugal',
+      to: 'Faro, Portugal',
+      distance: 280,
+      urgent: true,
+      fromLocation: cityCoordinates.lisboa,
+      toLocation: cityCoordinates.faro
+    }
+  ]
+}
+
+// Get loads for the selected truck
+const loads = computed(() => {
+  if (!selectedTruck.value) return []
+  return truckLoads[selectedTruck.value.id] || []
+})
 
 // Generate routes for each load
 const deliveryRoutes = computed(() => {
@@ -295,44 +327,155 @@ const deliveryRoutes = computed(() => {
   return routes
 })
 
-const deliveryMarkers = computed(() => {
-  const markers = []
+// Load Google Maps API
+const loadGoogleMapsAPI = () => {
+  return new Promise<void>((resolve, reject) => {
+    if (window.google?.maps) {
+      resolve()
+      return
+    }
+
+    const script = document.createElement('script')
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&libraries=places,geometry`
+    script.async = true
+    script.defer = true
+    script.addEventListener('load', () => resolve())
+    script.addEventListener('error', e => reject(e))
+    document.head.appendChild(script)
+  })
+}
+
+// Calculate a position along the route
+const calculateRoutePosition = async (fromLoc: Location, toLoc: Location) => {
+  await loadGoogleMapsAPI()
   
-  // Add markers for all loads
-  for (const load of loads.value) {
-    if (load.fromLocation) {
-      // From location marker
-      markers.push({
-        position: load.fromLocation,
-        title: `Pickup: ${load.from}`,
-        info: `
-          <div class="p-2">
-            <h3 class="font-bold">${load.type}</h3>
-            <p>Pickup location: ${load.from}</p>
-            <p>Weight: ${load.weight} tons</p>
-          </div>
-        `
-      })
+  try {
+    // Create a DirectionsService instance
+    const directionsService = new window.google.maps.DirectionsService()
+    
+    // Create the route request
+    const request = {
+      origin: { lat: fromLoc.lat, lng: fromLoc.lng },
+      destination: { lat: toLoc.lat, lng: toLoc.lng },
+      travelMode: window.google.maps.TravelMode.DRIVING
+    }
+    
+    // Get the route
+    const result = await directionsService.route(request)
+
+    if (result.routes[0] && result.routes[0].overview_path) {
+      const path = result.routes[0].overview_path
+      // Get a random point index from the path
+      const randomIndex = Math.floor(Math.random() * (path.length - 1))
+      const point = path[randomIndex]
+      
+      // Calculate heading based on current and next point
+      const nextPoint = path[randomIndex + 1]
+      const heading = window.google.maps.geometry.spherical.computeHeading(point, nextPoint)
+
+      return {
+        position: { lat: point.lat(), lng: point.lng() },
+        heading: heading
+      }
+    }
+  } catch (error) {
+    console.error('Error calculating route position:', error)
+  }
+
+  // Fallback to simple interpolation if route calculation fails
+  return {
+    position: {
+      lat: fromLoc.lat + (toLoc.lat - fromLoc.lat) * 0.5,
+      lng: fromLoc.lng + (toLoc.lng - fromLoc.lng) * 0.5
+    },
+    heading: 0
+  }
+}
+
+
+
+const updateMarkers = async () => {
+  try {
+    await loadGoogleMapsAPI()
+    const markers = []
+    
+    // Add markers for all loads
+    for (const load of loads.value) {
+      if (load.fromLocation) {
+        // Pickup location marker (warehouse icon)
+        markers.push({
+          position: load.fromLocation,
+          title: `Pickup: ${load.from}`,
+          icon: {
+            path: 'M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zM4 6h16v2H4V6zm0 12v-6h16v6H4z',
+            fillColor: load.urgent ? '#DC2626' : '#2563EB',
+            fillOpacity: 1,
+            strokeWeight: 1,
+            strokeColor: '#1F2937',
+            scale: 1.5,
+            anchor: new window.google.maps.Point(12, 12)
+          },
+          info: `
+            <div class="p-3 min-w-[200px]">
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="font-bold text-gray-900">${load.type}</h3>
+                <span class="px-2 py-1 text-xs font-medium rounded-full ${
+                  load.urgent ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+                }">${load.urgent ? 'Urgent' : 'Regular'}</span>
+              </div>
+              <div class="space-y-1 text-sm">
+                <p><span class="font-medium">Pickup:</span> ${load.from}</p>
+                <p><span class="font-medium">Weight:</span> ${load.weight} tons</p>
+                <p><span class="font-medium">Distance:</span> ${load.distance} km</p>
+              </div>
+            </div>
+          `
+        })
     }
     
     if (load.toLocation) {
-      // To location marker
+      // Delivery location marker (destination flag icon)
       markers.push({
         position: load.toLocation,
         title: `Delivery: ${load.to}`,
+        icon: {
+          path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
+          fillColor: load.urgent ? '#DC2626' : '#2563EB',
+          fillOpacity: 1,
+          strokeWeight: 1,
+          strokeColor: '#1F2937',
+          scale: 1.5,
+          anchor: new window.google.maps.Point(12, 22)
+        },
         info: `
-          <div class="p-2">
-            <h3 class="font-bold">${load.type}</h3>
-            <p>Delivery location: ${load.to}</p>
-            <p>Distance: ${load.distance} km</p>
+          <div class="p-3 min-w-[200px]">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="font-bold text-gray-900">${load.type}</h3>
+              <span class="px-2 py-1 text-xs font-medium rounded-full ${
+                load.urgent ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+              }">${load.urgent ? 'Urgent' : 'Regular'}</span>
+            </div>
+            <div class="space-y-1 text-sm">
+              <p><span class="font-medium">Delivery:</span> ${load.to}</p>
+              <p><span class="font-medium">Weight:</span> ${load.weight} tons</p>
+              <p><span class="font-medium">Distance:</span> ${load.distance} km</p>
+            </div>
           </div>
         `
       })
     }
   }
 
-  return markers
-})
+    deliveryMarkers.value = markers;
+  } catch (error) {
+    console.error('Error updating markers:', error)
+  }
+};
+
+// Watch for changes in loads and update markers
+watch(loads, async () => {
+  await updateMarkers()
+}, { immediate: true })
 
 const selectLoad = (load: Load) => {
   selectedLoad.value = load
