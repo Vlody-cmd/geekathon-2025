@@ -50,17 +50,12 @@
       <!-- Left side - Map -->
       <div class="w-2/3 p-4">
         <div class="bg-white rounded-lg shadow-lg h-[calc(100vh-6rem)]">
-          <div class="h-full flex items-center justify-center bg-gray-100 rounded-lg">
-            <!-- Placeholder for the map -->
-            <div class="text-center">
-              <img
-                src="https://i.imgur.com/YZU4aPm.png"
-                alt="Map Placeholder"
-                class="max-w-full max-h-full object-contain rounded-lg"
-              />
-              <p class="text-gray-500 mt-2">Interactive map will be implemented here</p>
-            </div>
-          </div>
+          <GoogleMap
+            :center="mapCenter"
+            :zoom="8"
+            :markers="deliveryMarkers"
+            :routes="deliveryRoutes"
+          />
         </div>
       </div>
 
@@ -97,7 +92,9 @@
             <div
               v-for="load in loads"
               :key="load.id"
-              class="mb-4 p-4 border rounded-lg hover:shadow-md transition-shadow"
+              class="mb-4 p-4 border rounded-lg hover:shadow-md transition-shadow cursor-pointer"
+              @click="selectLoad(load)"
+              :class="{ 'border-blue-500': selectedLoad?.id === load.id }"
             >
               <div class="flex justify-between items-start">
                 <div>
@@ -129,7 +126,7 @@
               </div>
               <div class="mt-3 flex justify-end">
                 <button
-                  @click="assignLoad(load)"
+                  @click.stop="assignLoad(load)"
                   class="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
                 >
                   Assign Load
@@ -188,7 +185,13 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import ChatInterface from '@/components/chat/ChatInterface.vue'
+import GoogleMap from '@/components/map/GoogleMap.vue'
 import type { TruckDetails } from '@/stores/user'
+
+interface Location {
+  lat: number
+  lng: number
+}
 
 interface Load {
   id: string
@@ -198,6 +201,8 @@ interface Load {
   to: string
   distance: number
   urgent: boolean
+  fromLocation?: Location
+  toLocation?: Location
 }
 
 const route = useRoute()
@@ -206,6 +211,8 @@ const userStore = useUserStore()
 
 const searchQuery = ref('')
 const isChatOpen = ref(false)
+const selectedLoad = ref<Load | null>(null)
+const mapCenter = ref<Location>({ lat: 50.4501, lng: 30.5234 }) // Kyiv center
 
 // Get the selected truck based on route parameter
 const selectedTruck = computed(() => {
@@ -224,6 +231,16 @@ onMounted(() => {
   }
 })
 
+// City coordinates
+const cityCoordinates = {
+  kyiv: { lat: 50.4501, lng: 30.5234 },
+  lviv: { lat: 49.8397, lng: 24.0297 },
+  odesa: { lat: 46.4825, lng: 30.7233 },
+  kharkiv: { lat: 49.9935, lng: 36.2304 },
+  dnipro: { lat: 48.4647, lng: 35.0462 },
+  warsaw: { lat: 52.2297, lng: 21.0122 }
+} as const
+
 const loads = ref<Load[]>([
   {
     id: '1',
@@ -233,6 +250,8 @@ const loads = ref<Load[]>([
     to: 'Lviv, Ukraine',
     distance: 540,
     urgent: true,
+    fromLocation: cityCoordinates.kyiv,
+    toLocation: cityCoordinates.lviv
   },
   {
     id: '2',
@@ -242,6 +261,8 @@ const loads = ref<Load[]>([
     to: 'Kharkiv, Ukraine',
     distance: 830,
     urgent: false,
+    fromLocation: cityCoordinates.odesa,
+    toLocation: cityCoordinates.kharkiv
   },
   {
     id: '3',
@@ -251,8 +272,75 @@ const loads = ref<Load[]>([
     to: 'Warsaw, Poland',
     distance: 1250,
     urgent: true,
-  },
+    fromLocation: cityCoordinates.dnipro,
+    toLocation: cityCoordinates.warsaw
+  }
 ])
+
+// Generate routes for each load
+const deliveryRoutes = computed(() => {
+  const routes = []
+  
+  for (const load of loads.value) {
+    if (load.fromLocation && load.toLocation) {
+      routes.push({
+        origin: load.fromLocation,
+        destination: load.toLocation,
+        // Different colors based on urgency
+        color: load.urgent ? '#DC2626' : '#2563EB'
+      })
+    }
+  }
+  
+  return routes
+})
+
+const deliveryMarkers = computed(() => {
+  const markers = []
+  
+  // Add markers for all loads
+  for (const load of loads.value) {
+    if (load.fromLocation) {
+      // From location marker
+      markers.push({
+        position: load.fromLocation,
+        title: `Pickup: ${load.from}`,
+        info: `
+          <div class="p-2">
+            <h3 class="font-bold">${load.type}</h3>
+            <p>Pickup location: ${load.from}</p>
+            <p>Weight: ${load.weight} tons</p>
+          </div>
+        `
+      })
+    }
+    
+    if (load.toLocation) {
+      // To location marker
+      markers.push({
+        position: load.toLocation,
+        title: `Delivery: ${load.to}`,
+        info: `
+          <div class="p-2">
+            <h3 class="font-bold">${load.type}</h3>
+            <p>Delivery location: ${load.to}</p>
+            <p>Distance: ${load.distance} km</p>
+          </div>
+        `
+      })
+    }
+  }
+
+  return markers
+})
+
+const selectLoad = (load: Load) => {
+  selectedLoad.value = load
+  // Center map on the "from" location of the selected load
+  if (load.fromLocation) {
+    mapCenter.value = load.fromLocation
+  }
+}
 
 const filterLoads = () => {
   // Implement load filtering logic here
