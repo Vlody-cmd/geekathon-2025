@@ -214,6 +214,28 @@ const isChatOpen = ref(false)
 const selectedLoad = ref<Load | null>(null)
 const deliveryMarkers = ref([])
 
+// Define marker icons
+const markerIcons = {
+  begin: {
+    path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z',
+    fillColor: '#4CAF50',
+    fillOpacity: 1,
+    strokeWeight: 1,
+    strokeColor: '#1F2937',
+    scale: 1.5,
+    anchor: new google.maps.Point(12, 22)
+  },
+  end: {
+    path: 'M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zM4 6h16v2H4V6zm0 12v-6h16v6H4z',
+    fillColor: '#F44336',
+    fillOpacity: 1,
+    strokeWeight: 1,
+    strokeColor: '#1F2937',
+    scale: 1.5,
+    anchor: new google.maps.Point(12, 12)
+  }
+}
+
 // Get the selected truck based on route parameter
 const selectedTruck = computed(() => {
   const truckId = route.params.truckId as string
@@ -241,10 +263,10 @@ onMounted(async () => {
     console.error('Truck not found:', route.params.truckId)
     router.push('/trucks')
   } else {
-    await updateMarkers()
+    // await updateMarkers()
     // Update markers periodically
-    const interval = setInterval(updateMarkers, 10000)
-    onUnmounted(() => clearInterval(interval))
+    // const interval = setInterval(updateMarkers, 10000)
+    // onUnmounted(() => clearInterval(interval))
   }
 })
 
@@ -309,21 +331,40 @@ const loads = computed(() => {
   return truckLoads[selectedTruck.value.id] || []
 })
 
-// Generate routes for each load
+// Generate routes and markers for each load
 const deliveryRoutes = computed(() => {
   const routes = []
+  const markers = []
   
   for (const load of loads.value) {
     if (load.fromLocation && load.toLocation) {
+      // Add route
       routes.push({
         origin: load.fromLocation,
         destination: load.toLocation,
         // Different colors based on urgency
         color: load.urgent ? '#DC2626' : '#2563EB'
       })
+      
+      // Add begin marker
+      markers.push({
+        position: load.fromLocation,
+        title: `Pickup: ${load.from}`,
+        icon: markerIcons.begin,
+        info: `<div class="p-3"><strong>Start Point:</strong> ${load.from}</div>`
+      })
+      
+      // Add end marker
+      markers.push({
+        position: load.toLocation,
+        title: `Delivery: ${load.to}`,
+        icon: markerIcons.end,
+        info: `<div class="p-3"><strong>End Point:</strong> ${load.to}</div>`
+      })
     }
   }
   
+  deliveryMarkers.value = markers
   return routes
 })
 
@@ -394,88 +435,88 @@ const calculateRoutePosition = async (fromLoc: Location, toLoc: Location) => {
 
 
 
-const updateMarkers = async () => {
-  try {
-    await loadGoogleMapsAPI()
-    const markers = []
+// const updateMarkers = async () => {
+//   try {
+//     await loadGoogleMapsAPI()
+//     const markers = []
     
-    // Add markers for all loads
-    for (const load of loads.value) {
-      if (load.fromLocation) {
-        // Pickup location marker (warehouse icon)
-        markers.push({
-          position: load.fromLocation,
-          title: `Pickup: ${load.from}`,
-          icon: {
-            path: 'M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zM4 6h16v2H4V6zm0 12v-6h16v6H4z',
-            fillColor: load.urgent ? '#DC2626' : '#2563EB',
-            fillOpacity: 1,
-            strokeWeight: 1,
-            strokeColor: '#1F2937',
-            scale: 1.5,
-            anchor: new window.google.maps.Point(12, 12)
-          },
-          info: `
-            <div class="p-3 min-w-[200px]">
-              <div class="flex items-center justify-between mb-2">
-                <h3 class="font-bold text-gray-900">${load.type}</h3>
-                <span class="px-2 py-1 text-xs font-medium rounded-full ${
-                  load.urgent ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
-                }">${load.urgent ? 'Urgent' : 'Regular'}</span>
-              </div>
-              <div class="space-y-1 text-sm">
-                <p><span class="font-medium">Pickup:</span> ${load.from}</p>
-                <p><span class="font-medium">Weight:</span> ${load.weight} tons</p>
-                <p><span class="font-medium">Distance:</span> ${load.distance} km</p>
-              </div>
-            </div>
-          `
-        })
-    }
+//     // Add markers for all loads
+//     for (const load of loads.value) {
+//       if (load.fromLocation) {
+//         // Pickup location marker (warehouse icon)
+//         markers.push({
+//           position: load.fromLocation,
+//           title: `Pickup: ${load.from}`,
+//           icon: {
+//             path: 'M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zM4 6h16v2H4V6zm0 12v-6h16v6H4z',
+//             fillColor: load.urgent ? '#DC2626' : '#2563EB',
+//             fillOpacity: 1,
+//             strokeWeight: 1,
+//             strokeColor: '#1F2937',
+//             scale: 1.5,
+//             anchor: new window.google.maps.Point(12, 12)
+//           },
+//           info: `
+//             <div class="p-3 min-w-[200px]">
+//               <div class="flex items-center justify-between mb-2">
+//                 <h3 class="font-bold text-gray-900">${load.type}</h3>
+//                 <span class="px-2 py-1 text-xs font-medium rounded-full ${
+//                   load.urgent ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+//                 }">${load.urgent ? 'Urgent' : 'Regular'}</span>
+//               </div>
+//               <div class="space-y-1 text-sm">
+//                 <p><span class="font-medium">Pickup:</span> ${load.from}</p>
+//                 <p><span class="font-medium">Weight:</span> ${load.weight} tons</p>
+//                 <p><span class="font-medium">Distance:</span> ${load.distance} km</p>
+//               </div>
+//             </div>
+//           `
+//         })
+//     }
     
-    if (load.toLocation) {
-      // Delivery location marker (destination flag icon)
-      markers.push({
-        position: load.toLocation,
-        title: `Delivery: ${load.to}`,
-        icon: {
-          path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
-          fillColor: load.urgent ? '#DC2626' : '#2563EB',
-          fillOpacity: 1,
-          strokeWeight: 1,
-          strokeColor: '#1F2937',
-          scale: 1.5,
-          anchor: new window.google.maps.Point(12, 22)
-        },
-        info: `
-          <div class="p-3 min-w-[200px]">
-            <div class="flex items-center justify-between mb-2">
-              <h3 class="font-bold text-gray-900">${load.type}</h3>
-              <span class="px-2 py-1 text-xs font-medium rounded-full ${
-                load.urgent ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
-              }">${load.urgent ? 'Urgent' : 'Regular'}</span>
-            </div>
-            <div class="space-y-1 text-sm">
-              <p><span class="font-medium">Delivery:</span> ${load.to}</p>
-              <p><span class="font-medium">Weight:</span> ${load.weight} tons</p>
-              <p><span class="font-medium">Distance:</span> ${load.distance} km</p>
-            </div>
-          </div>
-        `
-      })
-    }
-  }
+//     if (load.toLocation) {
+//       // Delivery location marker (destination flag icon)
+//       markers.push({
+//         position: load.toLocation,
+//         title: `Delivery: ${load.to}`,
+//         icon: {
+//           path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
+//           fillColor: load.urgent ? '#DC2626' : '#2563EB',
+//           fillOpacity: 1,
+//           strokeWeight: 1,
+//           strokeColor: '#1F2937',
+//           scale: 1.5,
+//           anchor: new window.google.maps.Point(12, 22)
+//         },
+//         info: `
+//           <div class="p-3 min-w-[200px]">
+//             <div class="flex items-center justify-between mb-2">
+//               <h3 class="font-bold text-gray-900">${load.type}</h3>
+//               <span class="px-2 py-1 text-xs font-medium rounded-full ${
+//                 load.urgent ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+//               }">${load.urgent ? 'Urgent' : 'Regular'}</span>
+//             </div>
+//             <div class="space-y-1 text-sm">
+//               <p><span class="font-medium">Delivery:</span> ${load.to}</p>
+//               <p><span class="font-medium">Weight:</span> ${load.weight} tons</p>
+//               <p><span class="font-medium">Distance:</span> ${load.distance} km</p>
+//             </div>
+//           </div>
+//         `
+//       })
+//     }
+//   }
 
-    deliveryMarkers.value = markers;
-  } catch (error) {
-    console.error('Error updating markers:', error)
-  }
-};
+//     deliveryMarkers.value = markers;
+//   } catch (error) {
+//     console.error('Error updating markers:', error)
+//   }
+// };
 
 // Watch for changes in loads and update markers
-watch(loads, async () => {
-  await updateMarkers()
-}, { immediate: true })
+// watch(loads, async () => {
+//   // await updateMarkers()
+// }, { immediate: true })
 
 const selectLoad = (load: Load) => {
   selectedLoad.value = load
