@@ -23,17 +23,11 @@
             <div
               class="h-[calc(100%-5rem)] flex items-center justify-center bg-gray-100 rounded-b-lg"
             >
-              <!-- Map Placeholder -->
-              <div class="text-center">
-                <img
-                  src="https://i.imgur.com/YZU4aPm.png"
-                  alt="Fleet Map Overview"
-                  class="max-w-full max-h-full object-contain rounded-lg shadow-md"
-                />
-                <p class="text-gray-500 mt-4 text-sm">
-                  Interactive map showing truck locations and routes
-                </p>
-              </div>
+              <GoogleMap
+                :center="mapCenter"
+                :zoom="6"
+                :markers="truckMarkers"
+              />
             </div>
           </div>
         </div>
@@ -131,9 +125,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import GoogleMap from '@/components/map/GoogleMap.vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+
+// Center the map on Ukraine
+const mapCenter = ref({
+  lat: 49.0384,
+  lng: 31.4513
+})
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -149,6 +150,56 @@ const inTransitTrucks = computed(
 const maintenanceTrucks = computed(
   () => userStore.user.trucks.filter((truck) => truck.status === 'maintenance').length,
 )
+
+// Create markers for each truck's location
+const truckMarkers = computed(() => {
+  return userStore.user.trucks
+    .filter(truck => truck.currentLocation) // Only include trucks with location data
+    .map(truck => ({
+      position: {
+        lat: truck.currentLocation!.lat,
+        lng: truck.currentLocation!.lng
+      },
+      status: truck.status,
+      title: `${truck.model} - ${truck.licensePlate}`,
+      info: `
+        <div class="p-3">
+          <h3 class="font-bold text-gray-900">${truck.model}</h3>
+          <p class="text-sm text-gray-600">${truck.licensePlate}</p>
+          <div class="mt-2 space-y-1">
+            <div class="flex items-center">
+              <span class="text-gray-500 w-20 text-sm">Status:</span>
+              <span class="text-sm font-medium ${
+                truck.status === 'available' 
+                  ? 'text-green-600' 
+                  : truck.status === 'in_transit' 
+                    ? 'text-blue-600' 
+                    : 'text-yellow-600'
+              }">${formatTruckStatus(truck.status)}</span>
+            </div>
+            <div class="flex items-center">
+              <span class="text-gray-500 w-20 text-sm">Capacity:</span>
+              <span class="text-sm">${truck.capacity}</span>
+            </div>
+            <div class="flex items-center">
+              <span class="text-gray-500 w-20 text-sm">Fuel:</span>
+              <span class="text-sm">${truck.fuelLevel}%</span>
+            </div>
+            <div class="flex items-center">
+              <span class="text-gray-500 w-20 text-sm">Location:</span>
+              <span class="text-sm">${truck.currentLocation!.address}</span>
+            </div>
+          </div>
+          <button
+            onclick="window.location.href='/working-zone/${truck.id}'"
+            class="mt-3 w-full px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+          >
+            View Details
+          </button>
+        </div>
+      `
+    }))
+})
 
 const goToWorkingZone = (truckId: string) => {
   router.push({ name: 'working-zone', params: { truckId } })
