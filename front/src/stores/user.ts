@@ -45,8 +45,8 @@ const defaultUser: User = {
       currentLocation: {
         lat: 41.5517,
         lng: -8.4265,
-        address: 'Braga, Portugal'
-      }
+        address: 'Braga, Portugal',
+      },
     },
     {
       id: 'T-002',
@@ -58,10 +58,10 @@ const defaultUser: User = {
       mileage: 120000,
       fuelLevel: 65,
       currentLocation: {
-        lat: 40.6566,
-        lng: -7.9125,
-        address: 'Viseu, Portugal'
-      }
+        lat: 40.4655,
+        lng: -8.0997,
+        address: 'Viseu, Portugal',
+      },
     },
     {
       id: 'T-003',
@@ -75,8 +75,8 @@ const defaultUser: User = {
       currentLocation: {
         lat: 38.5244,
         lng: -8.8882,
-        address: 'Setúbal, Portugal'
-      }
+        address: 'Setúbal, Portugal',
+      },
     },
     {
       id: 'T-004',
@@ -90,8 +90,8 @@ const defaultUser: User = {
       currentLocation: {
         lat: 39.2369,
         lng: -8.6857,
-        address: 'Santarém, Portugal'
-      }
+        address: 'Santarém, Portugal',
+      },
     },
     {
       id: 'T-005',
@@ -105,8 +105,8 @@ const defaultUser: User = {
       currentLocation: {
         lat: 37.7394,
         lng: -8.6589,
-        address: 'Sines, Portugal'
-      }
+        address: 'Sines, Portugal',
+      },
     },
     {
       id: 'T-006',
@@ -120,16 +120,16 @@ const defaultUser: User = {
       currentLocation: {
         lat: 38.0333,
         lng: -7.8833,
-        address: 'Beja, Portugal'
-      }
-    }
-  ]
+        address: 'Beja, Portugal',
+      },
+    },
+  ],
 }
 
 export const useUserStore = defineStore('user', () => {
   const user = ref<User>(defaultUser)
 
   return {
-    user
+    user,
   }
 })
