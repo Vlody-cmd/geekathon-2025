@@ -444,7 +444,7 @@
           v-if="!isChatOpen && selectedTruck?.status !== 'available'"
           class="bg-white rounded-lg shadow-lg h-[calc(100vh-6rem)] overflow-hidden flex flex-col"
         >
-          <div class="p-4 border-b">
+          <div v-if="selectedTruck?.status === 'available'" class="p-4 border-b">
             <h2 class="text-xl font-semibold text-gray-900">Available Loads</h2>
             <div class="mt-2 flex gap-2">
               <input
@@ -504,10 +504,26 @@
               </div>
               <div class="mt-3 flex justify-end">
                 <button
+                  v-if="selectedTruck?.status !== 'in_transit'"
                   @click.stop="assignLoad(load)"
                   class="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
                 >
                   Assign Load
+                </button>
+                  <button
+                    v-if="selectedTruck?.status === 'in_transit'"
+                    @click.stop="requestStop(selectedTruck)"
+                    :disabled="isLoadingStop"
+                    class="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    <span v-if="isLoadingStop" class="flex items-center">
+                      <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Analyzing...
+                    </span>
+                    <span v-else>Request Stop</span>
                 </button>
               </div>
             </div>
@@ -592,7 +608,7 @@ const routeStore = useRouteStore()
 const searchQuery = ref('')
 const isChatOpen = ref(false)
 const selectedLoad = ref<Load | null>(null)
-const deliveryMarkers = ref([])
+const deliveryMarkers = ref<any[]>([])
 const deliveryRoutes = ref([])
 
 // New reactive variables for destination and routes
@@ -788,13 +804,13 @@ const updateRoutesAndMarkers = () => {
 
   // Only show routes and delivery markers if truck is in_transit
   if (selectedTruck.value?.status === 'in_transit') {
-    for (const load of loads.value) {
-      if (load.fromLocation && load.toLocation) {
+  for (const load of loads.value) {
+    if (load.fromLocation && load.toLocation) {
         // Add route
-        routes.push({
-          origin: load.fromLocation,
-          destination: load.toLocation,
-          // Different colors based on urgency
+      routes.push({
+        origin: load.fromLocation,
+        destination: load.toLocation,
+        // Different colors based on urgency
           color: load.urgent ? '#DC2626' : '#2563EB',
         })
 
@@ -828,18 +844,18 @@ watch([loads, selectedTruck], updateRoutesAndMarkers, { immediate: true })
 // Calculate a position along the route
 const calculateRoutePosition = async (fromLoc: Location, toLoc: Location) => {
   await loadGoogleMapsAPI()
-
+  
   try {
     // Create a DirectionsService instance
     const directionsService = new window.google.maps.DirectionsService()
-
+    
     // Create the route request
     const request = {
       origin: { lat: fromLoc.lat, lng: fromLoc.lng },
       destination: { lat: toLoc.lat, lng: toLoc.lng },
       travelMode: window.google.maps.TravelMode.DRIVING,
     }
-
+    
     // Get the route
     const result = await directionsService.route(request)
 
@@ -848,7 +864,7 @@ const calculateRoutePosition = async (fromLoc: Location, toLoc: Location) => {
       // Get a random point index from the path
       const randomIndex = Math.floor(Math.random() * (path.length - 1))
       const point = path[randomIndex]
-
+      
       // Calculate heading based on current and next point
       const nextPoint = path[randomIndex + 1]
       const heading = window.google.maps.geometry.spherical.computeHeading(point, nextPoint)
@@ -872,89 +888,6 @@ const calculateRoutePosition = async (fromLoc: Location, toLoc: Location) => {
   }
 }
 
-// const updateMarkers = async () => {
-//   try {
-//     await loadGoogleMapsAPI()
-//     const markers = []
-
-//     // Add markers for all loads
-//     for (const load of loads.value) {
-//       if (load.fromLocation) {
-//         // Pickup location marker (warehouse icon)
-//         markers.push({
-//           position: load.fromLocation,
-//           title: `Pickup: ${load.from}`,
-//           icon: {
-//             path: 'M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zM4 6h16v2H4V6zm0 12v-6h16v6H4z',
-//             fillColor: load.urgent ? '#DC2626' : '#2563EB',
-//             fillOpacity: 1,
-//             strokeWeight: 1,
-//             strokeColor: '#1F2937',
-//             scale: 1.5,
-//             anchor: new window.google.maps.Point(12, 12)
-//           },
-//           info: `
-//             <div class="p-3 min-w-[200px]">
-//               <div class="flex items-center justify-between mb-2">
-//                 <h3 class="font-bold text-gray-900">${load.type}</h3>
-//                 <span class="px-2 py-1 text-xs font-medium rounded-full ${
-//                   load.urgent ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
-//                 }">${load.urgent ? 'Urgent' : 'Regular'}</span>
-//               </div>
-//               <div class="space-y-1 text-sm">
-//                 <p><span class="font-medium">Pickup:</span> ${load.from}</p>
-//                 <p><span class="font-medium">Weight:</span> ${load.weight} tons</p>
-//                 <p><span class="font-medium">Distance:</span> ${load.distance} km</p>
-//               </div>
-//             </div>
-//           `
-//         })
-//     }
-
-//     if (load.toLocation) {
-//       // Delivery location marker (destination flag icon)
-//       markers.push({
-//         position: load.toLocation,
-//         title: `Delivery: ${load.to}`,
-//         icon: {
-//           path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
-//           fillColor: load.urgent ? '#DC2626' : '#2563EB',
-//           fillOpacity: 1,
-//           strokeWeight: 1,
-//           strokeColor: '#1F2937',
-//           scale: 1.5,
-//           anchor: new window.google.maps.Point(12, 22)
-//         },
-//         info: `
-//           <div class="p-3 min-w-[200px]">
-//             <div class="flex items-center justify-between mb-2">
-//               <h3 class="font-bold text-gray-900">${load.type}</h3>
-//               <span class="px-2 py-1 text-xs font-medium rounded-full ${
-//                 load.urgent ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
-//               }">${load.urgent ? 'Urgent' : 'Regular'}</span>
-//             </div>
-//             <div class="space-y-1 text-sm">
-//               <p><span class="font-medium">Delivery:</span> ${load.to}</p>
-//               <p><span class="font-medium">Weight:</span> ${load.weight} tons</p>
-//               <p><span class="font-medium">Distance:</span> ${load.distance} km</p>
-//             </div>
-//           </div>
-//         `
-//       })
-//     }
-//   }
-
-//     deliveryMarkers.value = markers;
-//   } catch (error) {
-//     console.error('Error updating markers:', error)
-//   }
-// };
-
-// Watch for changes in loads and update markers
-// watch(loads, async () => {
-//   // await updateMarkers()
-// }, { immediate: true })
-
 const selectLoad = (load: Load) => {
   selectedLoad.value = load
   // Center map on the "from" location of the selected load
@@ -971,6 +904,92 @@ const filterLoads = () => {
 const assignLoad = (load: Load) => {
   console.log('Assigning load:', load)
   // Implement load assignment logic here
+}
+
+// Add loading state ref
+const isLoadingStop = ref(false)
+
+const requestStop = async (selectedTruck) => {
+  if (!selectedTruck) return
+  
+  try {
+    isLoadingStop.value = true
+    console.log('Requesting stop')
+
+    const currentCity = selectedTruck.currentLocation.address.split(',')[0].trim()
+    console.log('Current city:', currentCity)
+    console.log('Coordinates:', selectedTruck)
+
+    // Build query parameters
+    const params = new URLSearchParams({
+      currentCity: currentCity,
+      coordinates: selectedTruck.currentLocation.lat + ',' + selectedTruck.currentLocation.lng
+    })
+
+    const response = await fetch(`http://localhost:7072/api/stops/info?${params}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    const data = await response.json()
+    console.log('Stop info:', data)
+    
+    if (data.success && data.data.rows) {
+      // Convert coordinates from string to numbers and create markers
+      const stopMarkers = data.data.rows.forEach((stop, index) => {
+        // Parse coordinates from string format "37.8520° N, 7.9637° W"
+        const coords = stop["Location Coordinates"].split(',')
+        const lat = parseFloat(coords[0].split('°')[0].trim())
+        const lng = -Math.abs(parseFloat(coords[1].split('°')[0].trim())) // West is always negative
+
+        deliveryMarkers.value.push({
+          position: new google.maps.LatLng(lat, lng),
+          title: stop.Name,
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            fillColor: '#10B981',
+            fillOpacity: 1,
+            strokeWeight: 2,
+            strokeColor: '#064E3B',
+            scale: 10
+          },
+          info: `
+            <div class="p-3 min-w-[200px]">
+              <h3 class="font-bold text-gray-900">${stop.Name}</h3>
+              <div class="mt-2 space-y-1 text-sm">
+                <p><span class="font-medium">Hours:</span> ${stop["Operating Hours"]}</p>
+                <p><span class="font-medium">Conditions:</span> ${stop.Conditions}</p>
+                <p><span class="font-medium">Facilities:</span> 
+                  ${stop.Bathrooms === 'Yes' ? '🚽' : ''} 
+                  ${stop.Shower === 'Yes' ? '🚿' : ''}
+                </p>
+                <p><span class="font-medium">Rating:</span> ⭐ ${stop.Rating}</p>
+              </div>
+            </div>
+          `
+        })
+        // deliveryMarkers.value.push(stopMarker)
+      })
+
+    
+      console.log('Stop markers:', stopMarkers) 
+      console.log('Stop deliveryMarkers:', deliveryMarkers.value) 
+      // // Update the map markers
+      
+      // deliveryMarkers.value = [
+      //   // Keep the truck marker if it exists
+      //   ...deliveryMarkers.value.filter(marker => marker.icon?.path?.includes('M20 8h-3V4H3')),
+      //   // Add the new stop markers
+      //   ...stopMarkers
+      // ]
+    }
+  } catch (error) {
+    console.error('Error requesting stop:', error)
+  } finally {
+    isLoadingStop.value = false
+  }
 }
 
 const handleChatMessage = (message: string) => {
