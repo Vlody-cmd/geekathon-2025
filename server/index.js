@@ -136,6 +136,105 @@ app.post('/api/chat', async (req, res) => {
 });
 
 // Load suggestions endpoint
+// Helper function to normalize city names
+const normalizeCity = (city) => city.toLowerCase().replace(/ /g, '_');
+
+app.get('/api/stops/info', async (req, res) => {
+    try {
+        const { currentCity } = req.query;
+        
+        if (!currentCity) {
+            return res.status(400).send('Current city is required');
+        }
+
+        const prompt = `Suggest exactly 5 truck stops in or near ${currentCity}, Portugal. Return your response in EXACTLY this format for each stop:
+
+    The response should be in this format JSON and dont add any other text or explanation please return only the JSON object:
+
+{
+Name: [stop name],
+Location Coordinates: [latitude, longitude],
+Operating Hours: [hours],
+Conditions: [conditions],
+Bathrooms: [bathrooms],
+Shower: [shower],
+Rating: [rating],
+}
+
+
+You should replace the variables with the actual name of the stop, the coordinates of the stop and the operating hours of the stop.
+[stop name] -> Should be the name of the stop, THE REAL NAME OF THE STOP.
+[latitude, longitude] -> Should be the coordinates of the stop .
+[hours] -> Should be the operating hours of the stop.
+[conditions] -> Should be the conditions of the stop.
+[bathrooms] -> Should be the bathrooms of the stop.
+[shower] -> Should be the shower of the stop.
+[rating] -> Should be the rating of the stop.
+
+
+Return ONLY 5 stops.
+
+Use realistic coordinates near ${currentCity} and focus on 24/7 facilities when possible.`;
+
+        // Helper function to extract JSON from response
+        const extractJsonFromResponse = (response) => {
+            try {
+                // Find the JSON part between triple backticks if present
+                const match = response.match(/```(?:json)?\s*(\[|\{[\s\S]*\}|\])\s*```/);
+                if (match) {
+                    return match[1];
+                }
+
+                // If no backticks, try to find first { and last }
+                const start = response.indexOf('{');
+                const end = response.lastIndexOf('}') + 1;
+                if (start >= 0 && end > start) {
+                    return response.substring(start, end);
+                }
+
+                // If no JSON found, return null
+                return null;
+            } catch (error) {
+                console.error('Error extracting JSON:', error);
+                return null;
+            }
+        };
+
+        // Get AI suggestions
+        const suggestions = await getAIResponse(prompt);
+        console.log('Raw AI Suggestions:', suggestions);
+        
+        // Extract JSON part and parse it
+        const jsonPart = extractJsonFromResponse(suggestions);
+        if (!jsonPart) {
+            return res.status(500).json({
+                success: false,
+                error: 'Could not extract valid JSON from response'
+            });
+        }
+
+        try {
+            // Parse the JSON to ensure it's valid
+            const parsedJson = JSON.parse(jsonPart);
+            
+            // Send the parsed JSON with success status
+            res.json({
+                success: true,
+                data: parsedJson
+            });
+        } catch (error) {
+            console.error('Error parsing JSON:', error);
+            res.status(500).json({
+                success: false,
+                error: 'Invalid JSON format in response'
+            });
+        }
+    } catch (error) {
+        console.error('Error getting truck stops:', error);
+        res.status(500).send('Error getting truck stop suggestions');
+    }
+});
+
 app.get('/api/loads/suggestions', async (req, res) => {
     try {
         const { currentCity, destinationCity } = req.query;
