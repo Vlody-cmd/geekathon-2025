@@ -60,7 +60,7 @@ const defaultUser: User = {
       currentLocation: {
         lat: 40.4655,
         lng: -8.0997,
-        address: 'Viseu, Portugal',
+        address: 'Tondela, Portugal',
       },
     },
     {
