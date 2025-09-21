@@ -143,19 +143,78 @@ app.get('/api/loads/suggestions', async (req, res) => {
             return res.status(400).json({ error: 'Current city is required' });
         }
 
-        // Filter loads based on current city and destination city
-        const filteredLoads = loadsData.active_loads
-            .filter(load => {
-                const fromMatches = load.from.toLowerCase().replace(/ /g, '_') === currentCity.toLowerCase();
-                const toMatches = !destinationCity || load.to.toLowerCase().replace(/ /g, '_') === destinationCity.toLowerCase();
-                return fromMatches && toMatches;
-            })
-            .slice(0, 5); // Take only first 5 matches
+        // Helper function to normalize city names
+        const normalizeCity = (city) => city.toLowerCase().replace(/ /g, '_');
+        
+        // Find direct routes from current city to destination
+        const directRoutes = loadsData.active_loads.filter(load => {
+            const fromMatches = normalizeCity(load.from) === normalizeCity(currentCity);
+            const toMatches = !destinationCity || normalizeCity(load.to) === normalizeCity(destinationCity);
+            return fromMatches && toMatches;
+        });
 
-        // Create a smaller dataset for the AI
+        // If we don't have 5 direct routes and destination is specified, find connecting routes
+        let connectingRoutes = [];
+        if (destinationCity && directRoutes.length < 5) {
+            const visited = new Set(directRoutes.map(route => normalizeCity(route.from)));
+            const routesByCity = new Map();
+
+            // Create a map of routes by city
+            loadsData.active_loads.forEach(load => {
+                const fromCity = normalizeCity(load.from);
+                if (!routesByCity.has(fromCity)) {
+                    routesByCity.set(fromCity, []);
+                }
+                routesByCity.get(fromCity).push(load);
+            });
+
+            // Find connecting routes (maximum one stop)
+            loadsData.active_loads
+                .filter(firstLeg => normalizeCity(firstLeg.from) === normalizeCity(currentCity))
+                .forEach(firstLeg => {
+                    const intermediateCity = normalizeCity(firstLeg.to);
+                    if (!visited.has(intermediateCity)) {
+                        const secondLegs = loadsData.active_loads.filter(load => 
+                            normalizeCity(load.from) === intermediateCity && 
+                            normalizeCity(load.to) === normalizeCity(destinationCity)
+                        );
+
+                        secondLegs.forEach(secondLeg => {
+                            connectingRoutes.push({
+                                type: "Connecting",
+                                first_leg: firstLeg,
+                                second_leg: secondLeg,
+                                total_distance: firstLeg.distance + secondLeg.distance,
+                                total_time: firstLeg.estimated_time + secondLeg.estimated_time,
+                                connection_city: firstLeg.to,
+                                from: firstLeg.from,
+                                to: secondLeg.to,
+                                urgent: firstLeg.urgent || secondLeg.urgent
+                            });
+                        });
+                    }
+                });
+
+            // Sort connecting routes by total distance
+            connectingRoutes.sort((a, b) => a.total_distance - b.total_distance);
+        }
+
+        // Combine direct and connecting routes
+        const allRoutes = [
+            ...directRoutes.map(route => ({ type: "Direct", ...route })),
+            ...connectingRoutes
+        ].slice(0, 5);
+
+        // Create the final filtered dataset
         const filteredData = {
-            ...loadsData,
-            active_loads: filteredLoads
+            routes: allRoutes,
+            total_routes_found: allRoutes.length,
+            direct_routes_found: directRoutes.length,
+            connecting_routes_found: connectingRoutes.length,
+            route_types: {
+                direct: allRoutes.filter(r => r.type === "Direct").length,
+                connecting: allRoutes.filter(r => r.type === "Connecting").length
+            }
         };
 
         // Create a prompt with filtered data
@@ -164,10 +223,10 @@ app.get('/api/loads/suggestions', async (req, res) => {
 CONTEXT:
 - Current Location: ${currentCity}, Portugal
 ${destinationCity ? `- Destination: ${destinationCity}, Portugal` : ''}
-- Available Loads: ${filteredLoads.length} loads filtered from ${loadsData.active_loads.length} total
+- Available Loads: ${allRoutes.length} loads filtered from ${loadsData.active_loads.length} total
 
 DATA:
-${JSON.stringify(filteredLoads, null, 2)}
+${JSON.stringify(allRoutes, null, 2)}
 
 REQUIRED RESPONSE FORMAT - Return this exact JSON structure with appropriate values:
 {
@@ -281,7 +340,16 @@ REMEMBER: Return ONLY the JSON object, no other text.`;
         // console.log('Parsed AI Response:', JSON.stringify(parsedResponse, null, 2));
     
 
-        res.send(filteredData.active_loads);
+         res.json({
+            success: true,
+            data: filteredData,
+            summary: {
+                message: `Found ${filteredData.direct_routes_found} direct routes and ${filteredData.connecting_routes_found} connecting routes`,
+                total_options: filteredData.total_routes_found,
+                has_direct_routes: filteredData.direct_routes_found > 0,
+                has_connecting_routes: filteredData.connecting_routes_found > 0
+            }
+        });
     } catch (error) {
         console.error('Error getting load suggestions:', error);
         res.status(500).json({ 
