@@ -37,7 +37,12 @@ const router = createRouter({
         {
           path: 'settings',
           name: 'settings',
-          component: () => import('../views/ProfileView.vue'), // Reusing ProfileView for now
+          component: () => import('../views/SettingsView.vue')
+        },
+        {
+          path: 'info',
+          name: 'info',
+          component: () => import('../views/InfoView.vue'),
         },
       ],
     },
