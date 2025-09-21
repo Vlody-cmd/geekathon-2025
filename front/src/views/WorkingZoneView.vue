@@ -53,7 +53,7 @@
           <GoogleMap
             :center="mapCenter"
             :zoom="8"
-            :markers="deliveryMarkers"
+            :markers="combinedMarkers"
             :routes="deliveryRoutes"
           />
         </div>
@@ -188,6 +188,13 @@
           </div>
 
           <div class="flex-1 overflow-y-auto p-4">
+            <!-- Debug Info -->
+            <div class="mb-4 p-2 bg-gray-100 text-xs">
+              <p>Routes loaded: {{ availableRoutes.length }}</p>
+              <p>Selected route: {{ selectedRoute?.id || 'None' }}</p>
+              <p>Show routes: {{ showRoutes }}</p>
+            </div>
+
             <!-- Loading State -->
             <div v-if="isLoadingRoutes" class="text-center text-gray-500 mt-8">
               <svg
@@ -555,6 +562,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { useRouteStore } from '@/stores/route'
 import ChatInterface from '@/components/chat/ChatInterface.vue'
 import GoogleMap from '@/components/map/GoogleMap.vue'
 import type { TruckDetails } from '@/stores/user'
@@ -579,6 +587,7 @@ interface Load {
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+const routeStore = useRouteStore()
 
 const searchQuery = ref('')
 const isChatOpen = ref(false)
@@ -630,6 +639,11 @@ const mapCenter = computed(() => {
   }
   // Default to central Portugal if no truck selected
   return { lat: 39.5, lng: -8.8 }
+})
+
+// Use only legacy markers - no route store markers
+const combinedMarkers = computed(() => {
+  return deliveryMarkers.value || []
 })
 
 // Redirect to truck list if no truck is selected or truck not found
@@ -784,7 +798,8 @@ const updateRoutesAndMarkers = () => {
           color: load.urgent ? '#DC2626' : '#2563EB',
         })
 
-        // Add begin marker
+        // Skip adding pickup/delivery markers - only show truck marker and route lines
+        /*
         markers.push({
           position: load.fromLocation,
           title: `Pickup: ${load.from}`,
@@ -792,13 +807,13 @@ const updateRoutesAndMarkers = () => {
           info: `<div class="p-3"><strong>Start Point:</strong> ${load.from}</div>`,
         })
 
-        // Add end marker
         markers.push({
           position: load.toLocation,
           title: `Delivery: ${load.to}`,
           icon: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
           info: `<div class="p-3"><strong>End Point:</strong> ${load.to}</div>`,
         })
+        */
       }
     }
   }
@@ -1031,14 +1046,30 @@ const generateMockRoutes = (destination: string) => {
 }
 
 const getCityCoordinates = (cityName: string) => {
-  const normalizedName = cityName
+  // Clean up the city name - remove country, extra spaces, etc.
+  let cleanName = cityName
     .toLowerCase()
+    .replace(/, portugal/g, '')
+    .replace(/portugal/g, '')
+    .trim()
     .replace(/[áàâã]/g, 'a')
     .replace(/[éê]/g, 'e')
     .replace(/[í]/g, 'i')
     .replace(/[óôõ]/g, 'o')
     .replace(/[ú]/g, 'u')
-  return cityCoordinates[normalizedName] || null
+    .replace(/ç/g, 'c')
+
+  const coords = cityCoordinates[cleanName] || null
+
+  console.log('City coordinate lookup:', {
+    original: cityName,
+    cleaned: cleanName,
+    found: !!coords,
+    coordinates: coords,
+    availableCities: Object.keys(cityCoordinates),
+  })
+
+  return coords
 }
 
 const calculateDistance = (
@@ -1059,7 +1090,16 @@ const calculateDistance = (
 }
 
 const selectRoute = (route: any) => {
+  console.log('selectRoute called with:', route)
   selectedRoute.value = route
+
+  // Set the route in the route store
+  routeStore.setSelectedRoute(route)
+
+  // Update map to show the selected route (legacy system)
+  console.log('About to call updateMapWithSelectedRoute')
+  updateMapWithSelectedRoute(route)
+  console.log('updateMapWithSelectedRoute completed')
 }
 
 const fetchRoutesFromAPI = async (destination: string) => {
@@ -1146,9 +1186,10 @@ const fetchRoutesFromAPI = async (destination: string) => {
       })
 
       console.log(`Loaded ${availableRoutes.value.length} routes from API`)
+      console.log('Available routes:', availableRoutes.value)
 
-      // Update map with route markers
-      updateMapWithRoutes(routes)
+      // Reset map to show only truck when routes are loaded
+      updateRoutesAndMarkers()
     } else {
       // No valid routes found in API response
       console.warn('API response does not contain expected route format:', apiResponse)
@@ -1178,7 +1219,10 @@ const startRoute = (route: any) => {
   alert(`Starting ${route.name} to ${selectedDestination.value}`)
 }
 
-const updateMapWithRoutes = (routes: any[]) => {
+const updateMapWithSelectedRoute = (route: any) => {
+  console.log('updateMapWithSelectedRoute called with route:', route)
+  console.log('selectedTruck.value:', selectedTruck.value)
+
   const markers = []
   const routePaths = []
 
@@ -1230,121 +1274,199 @@ const updateMapWithRoutes = (routes: any[]) => {
     })
   }
 
-  // Add markers and routes for suggested loads
-  routes.forEach((route, index) => {
-    const routeColor = route.urgent ? '#DC2626' : '#2563EB'
+  // Add route lines but no route point markers
+  if (route && route.routeData) {
+    const apiRoute = route.routeData
+    const routeColor = apiRoute.urgent ? '#DC2626' : '#2563EB'
 
-    if (route.type === 'Connecting') {
-      // Handle connecting routes with two legs
-      const firstLeg = route.first_leg
-      const secondLeg = route.second_leg
+    if (apiRoute.type === 'Connecting') {
+      // Handle connecting routes with two legs and all connection points
+      const firstLeg = apiRoute.first_leg
+      const secondLeg = apiRoute.second_leg
 
-      // Get coordinates for cities
-      const fromCoords = getCityCoordinates(firstLeg.from.toLowerCase())
-      const connectionCoords = getCityCoordinates(route.connection_city.toLowerCase())
-      const toCoords = getCityCoordinates(secondLeg.to.toLowerCase())
+      // Get coordinates from API data (they're already provided)
+      const fromCoords = firstLeg.fromLocation
+      const connectionCoords = firstLeg.toLocation // Connection city is the destination of first leg
+      const toCoords = secondLeg.toLocation
+
+      console.log('Connecting route coordinates from API:', {
+        firstLegFrom: firstLeg.from,
+        fromCoords,
+        connectionCity: apiRoute.connection_city,
+        connectionCoords,
+        secondLegTo: secondLeg.to,
+        toCoords,
+        apiRoute: apiRoute,
+      })
 
       if (fromCoords && connectionCoords && toCoords) {
-        // Add pickup marker
+        // Add pickup marker (Step 1)
         markers.push({
           position: fromCoords,
-          title: `Pickup: ${firstLeg.from}`,
+          title: `1. Pickup: ${firstLeg.from}`,
           icon: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
           info: `
             <div class="p-3">
-              <h4 class="font-bold text-gray-900">Pickup Location</h4>
+              <h4 class="font-bold text-gray-900">🚛 Step 1: First Pickup</h4>
               <p class="text-sm text-gray-600">${firstLeg.from}</p>
-              <p class="text-sm"><strong>Load:</strong> ${firstLeg.type}</p>
-              <p class="text-sm"><strong>Weight:</strong> ${firstLeg.weight} tons</p>
+              <div class="mt-2 space-y-1">
+                <p class="text-sm"><strong>Load:</strong> ${firstLeg.type}</p>
+                <p class="text-sm"><strong>Cargo:</strong> ${firstLeg.cargo || 'N/A'}</p>
+                <p class="text-sm"><strong>Weight:</strong> ${firstLeg.weight} tons</p>
+                <p class="text-sm"><strong>Value:</strong> ${firstLeg.value || 'N/A'}</p>
+                <p class="text-sm"><strong>Urgent:</strong> ${firstLeg.urgent ? 'Yes' : 'No'}</p>
+              </div>
             </div>
           `,
         })
 
-        // Add connection marker
+        // Add connection marker (Step 2)
         markers.push({
           position: connectionCoords,
-          title: `Connection: ${route.connection_city}`,
+          title: `2. Connection: ${apiRoute.connection_city}`,
           icon: 'https://maps.google.com/mapfiles/ms/icons/yellow-dot.png',
           info: `
             <div class="p-3">
-              <h4 class="font-bold text-gray-900">Connection Point</h4>
-              <p class="text-sm text-gray-600">${route.connection_city}</p>
-              <p class="text-sm">Transfer between loads</p>
+              <h4 class="font-bold text-gray-900">🔄 Step 2: Connection Point</h4>
+              <p class="text-sm text-gray-600">${apiRoute.connection_city}</p>
+              <div class="mt-2 space-y-2">
+                <div class="border-l-4 border-red-400 pl-2">
+                  <p class="text-sm font-medium text-red-700">Deliver:</p>
+                  <p class="text-sm">${firstLeg.type} (${firstLeg.weight}t)</p>
+                  <p class="text-sm">${firstLeg.cargo || ''}</p>
+                </div>
+                <div class="border-l-4 border-green-400 pl-2">
+                  <p class="text-sm font-medium text-green-700">Pickup:</p>
+                  <p class="text-sm">${secondLeg.type} (${secondLeg.weight}t)</p>
+                  <p class="text-sm">${secondLeg.cargo || ''}</p>
+                </div>
+              </div>
             </div>
           `,
         })
 
-        // Add delivery marker
+        // Add final delivery marker (Step 3)
         markers.push({
           position: toCoords,
-          title: `Delivery: ${secondLeg.to}`,
+          title: `3. Final Delivery: ${secondLeg.to}`,
           icon: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
           info: `
             <div class="p-3">
-              <h4 class="font-bold text-gray-900">Final Delivery</h4>
+              <h4 class="font-bold text-gray-900">🎯 Step 3: Final Delivery</h4>
               <p class="text-sm text-gray-600">${secondLeg.to}</p>
-              <p class="text-sm"><strong>Load:</strong> ${secondLeg.type}</p>
-              <p class="text-sm"><strong>Weight:</strong> ${secondLeg.weight} tons</p>
+              <div class="mt-2 space-y-1">
+                <p class="text-sm"><strong>Load:</strong> ${secondLeg.type}</p>
+                <p class="text-sm"><strong>Cargo:</strong> ${secondLeg.cargo || 'N/A'}</p>
+                <p class="text-sm"><strong>Weight:</strong> ${secondLeg.weight} tons</p>
+                <p class="text-sm"><strong>Value:</strong> ${secondLeg.value || 'N/A'}</p>
+                <p class="text-sm"><strong>Urgent:</strong> ${secondLeg.urgent ? 'Yes' : 'No'}</p>
+              </div>
             </div>
           `,
         })
 
-        // Add route paths
+        // Add route paths for the complete connecting route
+        // First leg: pickup to connection city
         routePaths.push({
           origin: fromCoords,
           destination: connectionCoords,
           color: routeColor,
         })
+
+        // Second leg: connection city to final delivery
         routePaths.push({
           origin: connectionCoords,
           destination: toCoords,
           color: routeColor,
         })
+
+        console.log('Added connecting route paths:', {
+          firstLeg: `${firstLeg.from} → ${apiRoute.connection_city}`,
+          secondLeg: `${apiRoute.connection_city} → ${secondLeg.to}`,
+          totalPaths: routePaths.length,
+          coordinates: {
+            from: fromCoords,
+            connection: connectionCoords,
+            to: toCoords,
+          },
+          routePaths: routePaths,
+        })
       }
     } else {
       // Handle direct routes
-      const fromCoords = getCityCoordinates(route.from.toLowerCase())
-      const toCoords = getCityCoordinates(route.to.toLowerCase())
+      // Use API coordinates if available, otherwise fall back to city lookup
+      const fromCoords = apiRoute.fromLocation || getCityCoordinates(apiRoute.from.toLowerCase())
+      const toCoords = apiRoute.toLocation || getCityCoordinates(apiRoute.to.toLowerCase())
+
+      console.log('Direct route coordinates:', {
+        from: apiRoute.from,
+        to: apiRoute.to,
+        fromCoords,
+        toCoords,
+        usingApiCoords: !!(apiRoute.fromLocation && apiRoute.toLocation),
+      })
 
       if (fromCoords && toCoords) {
-        // Add pickup marker
+        // Add pickup marker (Step 1)
         markers.push({
           position: fromCoords,
-          title: `Pickup: ${route.from}`,
+          title: `1. Pickup: ${apiRoute.from}`,
           icon: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
           info: `
             <div class="p-3">
-              <h4 class="font-bold text-gray-900">Pickup Location</h4>
-              <p class="text-sm text-gray-600">${route.from}</p>
-              <p class="text-sm"><strong>Load:</strong> ${route.type}</p>
-              <p class="text-sm"><strong>Weight:</strong> ${route.weight} tons</p>
+              <h4 class="font-bold text-gray-900">🚛 Step 1: Pickup</h4>
+              <p class="text-sm text-gray-600">${apiRoute.from}</p>
+              <div class="mt-2 space-y-1">
+                <p class="text-sm"><strong>Load:</strong> ${apiRoute.type}</p>
+                <p class="text-sm"><strong>Cargo:</strong> ${apiRoute.cargo || 'N/A'}</p>
+                <p class="text-sm"><strong>Weight:</strong> ${apiRoute.weight} tons</p>
+                <p class="text-sm"><strong>Value:</strong> ${apiRoute.value || 'N/A'}</p>
+                <p class="text-sm"><strong>Urgent:</strong> ${apiRoute.urgent ? 'Yes' : 'No'}</p>
+              </div>
             </div>
           `,
         })
 
-        // Add delivery marker
+        // Add delivery marker (Step 2)
         markers.push({
           position: toCoords,
-          title: `Delivery: ${route.to}`,
+          title: `2. Delivery: ${apiRoute.to}`,
           icon: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
           info: `
             <div class="p-3">
-              <h4 class="font-bold text-gray-900">Delivery Location</h4>
-              <p class="text-sm text-gray-600">${route.to}</p>
-              <p class="text-sm"><strong>Load:</strong> ${route.type}</p>
-              <p class="text-sm"><strong>Weight:</strong> ${route.weight} tons</p>
+              <h4 class="font-bold text-gray-900">🎯 Step 2: Delivery</h4>
+              <p class="text-sm text-gray-600">${apiRoute.to}</p>
+              <div class="mt-2 space-y-1">
+                <p class="text-sm"><strong>Load:</strong> ${apiRoute.type}</p>
+                <p class="text-sm"><strong>Cargo:</strong> ${apiRoute.cargo || 'N/A'}</p>
+                <p class="text-sm"><strong>Weight:</strong> ${apiRoute.weight} tons</p>
+                <p class="text-sm"><strong>Value:</strong> ${apiRoute.value || 'N/A'}</p>
+                <p class="text-sm"><strong>Urgent:</strong> ${apiRoute.urgent ? 'Yes' : 'No'}</p>
+              </div>
             </div>
           `,
         })
 
-        // Add route path
+        // Add direct route path
         routePaths.push({
           origin: fromCoords,
           destination: toCoords,
           color: routeColor,
         })
+
+        console.log('Added direct route path:', {
+          route: `${apiRoute.from} → ${apiRoute.to}`,
+          totalPaths: routePaths.length,
+        })
       }
     }
+  }
+
+  console.log('Final markers and routes being set:', {
+    markersCount: markers.length,
+    routePathsCount: routePaths.length,
+    markers: markers,
+    routePaths: routePaths,
   })
 
   deliveryMarkers.value = markers
@@ -1356,6 +1478,8 @@ const goBackToDestinationInput = () => {
   selectedRoute.value = null
   availableRoutes.value = []
   routesError.value = ''
+  // Clear route store
+  routeStore.clearSelectedRoute()
   // Reset map to show only truck
   updateRoutesAndMarkers()
 }

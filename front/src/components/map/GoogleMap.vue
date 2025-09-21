@@ -13,16 +13,18 @@ interface Route {
   color?: string
 }
 
+interface MapMarker {
+  position: { lat: number; lng: number }
+  title?: string
+  info?: string
+  icon?: string
+  status?: string
+}
+
 const props = defineProps<{
   center?: { lat: number; lng: number }
   zoom?: number
-  markers?: Array<{
-    position: { lat: number; lng: number }
-    title?: string
-    info?: string
-    icon?: string
-    status?: string
-  }>
+  markers?: MapMarker[]
   routes?: Route[]
 }>()
 
@@ -33,7 +35,7 @@ const infoWindows = ref<google.maps.InfoWindow[]>([])
 const directionsRenderers = ref<google.maps.DirectionsRenderer[]>([])
 
 const clearRoutes = () => {
-  directionsRenderers.value.forEach(renderer => renderer.setMap(null))
+  directionsRenderers.value.forEach((renderer) => renderer.setMap(null))
   directionsRenderers.value = []
 }
 
@@ -47,8 +49,8 @@ const drawRoute = async (route: Route) => {
       polylineOptions: {
         strokeColor: route.color || '#4A90E2',
         strokeOpacity: 0.8,
-        strokeWeight: 5
-      }
+        strokeWeight: 5,
+      },
     })
 
     directionsRenderer.setMap(map.value)
@@ -57,7 +59,7 @@ const drawRoute = async (route: Route) => {
       origin: route.origin,
       destination: route.destination,
       travelMode: google.maps.TravelMode.DRIVING,
-      optimizeWaypoints: true
+      optimizeWaypoints: true,
     })
 
     directionsRenderer.setDirections(result)
@@ -78,60 +80,76 @@ const initializeMap = async () => {
         {
           featureType: 'poi',
           elementType: 'labels',
-          stylers: [{ visibility: 'off' }]
-        }
+          stylers: [{ visibility: 'off' }],
+        },
       ],
       mapTypeControl: true,
       streetViewControl: true,
-      fullscreenControl: true
+      fullscreenControl: true,
     }
 
     map.value = new window.google.maps.Map(mapContainer.value, mapOptions)
 
     // Add markers if provided
-    if (props.markers) {
-      props.markers.forEach(markerData => {
-        // Convert icon anchor from object to Point if needed
-        let icon = markerData.icon
-        if (icon && typeof icon === 'object' && 'anchor' in icon && icon.anchor && 'x' in icon.anchor) {
-          icon = {
-            ...icon,
-            anchor: new google.maps.Point(icon.anchor.x, icon.anchor.y)
-          }
-        }
-
-        const marker = new google.maps.Marker({
-          position: markerData.position,
-          map: map.value,
-          title: markerData.title,
-          icon: icon,
-          animation: google.maps.Animation.DROP
-        })
-
-        if (markerData.info) {
-          const infoWindow = new google.maps.InfoWindow({
-            content: markerData.info
-          })
-
-          marker.addListener('click', () => {
-            infoWindows.value.forEach(window => window.close())
-            infoWindow.open(map.value, marker)
-          })
-
-          infoWindows.value.push(infoWindow)
-        }
-
-        markers.value.push(marker)
-      })
-    }
+    addMarkersToMap()
 
     // Draw routes if provided
     if (props.routes) {
-      props.routes.forEach(route => drawRoute(route))
+      props.routes.forEach((route) => drawRoute(route))
     }
   } catch (error) {
     console.error('Error initializing map:', error)
   }
+}
+
+const addMarkersToMap = () => {
+  // Clear existing markers
+  clearMarkers()
+
+  if (!props.markers || !map.value) return
+
+  props.markers.forEach((markerData) => {
+    // Convert icon anchor from object to Point if needed
+    let icon = markerData.icon
+    if (icon && typeof icon === 'object' && 'anchor' in icon && icon.anchor && 'x' in icon.anchor) {
+      icon = {
+        ...icon,
+        anchor: new google.maps.Point(icon.anchor.x, icon.anchor.y),
+      }
+    }
+
+    const marker = new google.maps.Marker({
+      position: markerData.position,
+      map: map.value,
+      title: markerData.title,
+      icon: icon,
+      animation: google.maps.Animation.DROP,
+    })
+
+    // Add click listener for marker interactions
+    if (markerData.info) {
+      const infoWindow = new google.maps.InfoWindow({
+        content: markerData.info,
+      })
+
+      marker.addListener('click', () => {
+        // Close all open info windows first
+        infoWindows.value.forEach((window) => window.close())
+        infoWindow.open(map.value, marker)
+      })
+
+      infoWindows.value.push(infoWindow)
+    }
+
+    markers.value.push(marker)
+  })
+}
+
+const clearMarkers = () => {
+  markers.value.forEach((marker) => marker.setMap(null))
+  markers.value = []
+  infoWindows.value.forEach((window) => window.close())
+  infoWindows.value = []
 }
 
 // Load Google Maps API
@@ -150,10 +168,21 @@ const loadGoogleMapsAPI = () => {
       // Give a small delay for the API to fully initialize
       setTimeout(resolve, 100)
     })
-    script.addEventListener('error', e => reject(e))
+    script.addEventListener('error', (e) => reject(e))
     document.head.appendChild(script)
   })
 }
+
+// Watch for changes in markers prop
+watch(
+  () => props.markers,
+  () => {
+    if (map.value) {
+      addMarkersToMap()
+    }
+  },
+  { deep: true },
+)
 
 // Watch for changes in routes prop
 watch(
@@ -161,10 +190,10 @@ watch(
   (newRoutes) => {
     if (map.value && newRoutes) {
       clearRoutes()
-      newRoutes.forEach(route => drawRoute(route))
+      newRoutes.forEach((route) => drawRoute(route))
     }
   },
-  { deep: true }
+  { deep: true },
 )
 
 // Watch for changes in center prop
@@ -174,7 +203,7 @@ watch(
     if (map.value && newCenter) {
       map.value.panTo(newCenter)
     }
-  }
+  },
 )
 
 onMounted(async () => {
@@ -188,15 +217,14 @@ onMounted(async () => {
 
 onUnmounted(() => {
   // Cleanup markers and info windows
-  markers.value.forEach(marker => marker.setMap(null))
-  infoWindows.value.forEach(window => window.close())
+  clearMarkers()
   clearRoutes()
 })
 
 // Expose map instance for parent component
 defineExpose({
   map,
-  markers
+  markers,
 })
 </script>
 
