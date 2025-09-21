@@ -1,0 +1,105 @@
+{
+  "active_loads": [
+    {
+      "id": "L001",
+      "type": "Electronics",
+      "cargo": "Consumer Electronics",
+      "weight": 15,
+      "from": "Braga",
+      "to": "Porto",
+      "distance": 55,
+      "urgent": true,
+      "delivery_window": "Same Day",
+      "value": "€50,000",
+      "fromLocation": { "lat": 41.5517, "lng": -8.4265 },
+      "toLocation": { "lat": 41.1579, "lng": -8.6291 }
+    }
+  ],
+  "road_conditions": {
+    "A1": "Good",
+    "A2": "Construction Work",
+    "A3": "Heavy Traffic",
+    "A4": "Good",
+    "A5": "Good",
+    "A6": "Moderate Traffic",
+    "A7": "Good",
+    "A8": "Construction Work",
+    "A9": "Good",
+    "A10": "Good",
+    "A11": "Moderate Traffic",
+    "A12": "Good",
+    "A13": "Good",
+    "A14": "Good",
+    "A15": "Construction Work"
+  },
+  "weather_conditions": {
+    "north": "Clear",
+    "central": "Partly Cloudy",
+    "south": "Clear",
+    "coastal": "Windy",
+    "inland": "Sunny"
+  },
+  "cities": {
+    "braga": { "lat": 41.5517, "lng": -8.4265 },
+    "porto": { "lat": 41.1579, "lng": -8.6291 },
+    "viseu": { "lat": 40.6566, "lng": -7.9125 },
+    "coimbra": { "lat": 40.2033, "lng": -8.4103 },
+    "lisboa": { "lat": 38.7223, "lng": -9.1393 },
+    "setubal": { "lat": 38.5244, "lng": -8.8882 },
+    "beja": { "lat": 38.0333, "lng": -7.8833 },
+    "faro": { "lat": 37.0193, "lng": -7.9304 },
+    "aveiro": { "lat": 40.6405, "lng": -8.6538 },
+    "leiria": { "lat": 39.7436, "lng": -8.8071 },
+    "evora": { "lat": 38.5714, "lng": -7.9135 },
+    "guarda": { "lat": 40.5369, "lng": -7.2675 },
+    "santarem": { "lat": 39.2369, "lng": -8.6857 },
+    "viana_do_castelo": { "lat": 41.6918, "lng": -8.8344 },
+    "vila_real": { "lat": 41.3010, "lng": -7.7426 },
+    "castelo_branco": { "lat": 39.8231, "lng": -7.4931 },
+    "portalegre": { "lat": 39.2969, "lng": -7.4306 },
+    "funchal": { "lat": 32.6669, "lng": -16.9241 },
+    "ponta_delgada": { "lat": 37.7394, "lng": -25.6687 }
+  },
+  "cargo_types": {
+    "Electronics": {
+      "subtypes": ["Consumer Electronics", "Computer Parts", "Mobile Devices", "Home Appliances", "Industrial Electronics"],
+      "value_range": ["€20,000", "€100,000"],
+      "typical_weights": [5, 25]
+    },
+    "Construction": {
+      "subtypes": ["Building Materials", "Heavy Equipment", "Tools", "Pipes", "Steel"],
+      "value_range": ["€15,000", "€80,000"],
+      "typical_weights": [20, 40]
+    },
+    "Food": {
+      "subtypes": ["Fresh Produce", "Frozen Goods", "Dairy", "Beverages", "Dry Goods"],
+      "value_range": ["€10,000", "€50,000"],
+      "typical_weights": [10, 30]
+    },
+    "Medical": {
+      "subtypes": ["Pharmaceuticals", "Medical Equipment", "Supplies", "Lab Equipment", "PPE"],
+      "value_range": ["€30,000", "€150,000"],
+      "typical_weights": [5, 20]
+    },
+    "Automotive": {
+      "subtypes": ["Car Parts", "Tires", "Engines", "Accessories", "Tools"],
+      "value_range": ["€25,000", "€120,000"],
+      "typical_weights": [15, 35]
+    },
+    "Textiles": {
+      "subtypes": ["Clothing", "Fabrics", "Raw Materials", "Home Textiles", "Industrial Textiles"],
+      "value_range": ["€15,000", "€70,000"],
+      "typical_weights": [10, 25]
+    },
+    "Chemical": {
+      "subtypes": ["Industrial Chemicals", "Cleaning Products", "Paint", "Fertilizers", "Plastics"],
+      "value_range": ["€20,000", "€90,000"],
+      "typical_weights": [15, 30]
+    },
+    "Furniture": {
+      "subtypes": ["Home Furniture", "Office Furniture", "Outdoor Furniture", "Parts", "Raw Materials"],
+      "value_range": ["€10,000", "€60,000"],
+      "typical_weights": [20, 40]
+    }
+  }
+}

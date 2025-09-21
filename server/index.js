@@ -1,7 +1,20 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const { BedrockRuntimeClient, InvokeModelCommand } = require('@aws-sdk/client-bedrock-runtime');
 require('dotenv').config();
+
+// Load the generated loads data
+let loadsData;
+try {
+    loadsData = require('./data/generated_loads.json');
+    console.log(`Loaded ${loadsData.active_loads.length} loads from database`);
+} catch (error) {
+    console.error('Error loading loads data:', error);
+    // Fallback to template data
+    loadsData = require('./data/loads.json');
+    console.log('Using template data as fallback');
+}
 
 const app = express();
 
@@ -20,15 +33,15 @@ async function getAIResponse(prompt) {
         const body = {
             inputText: prompt,
             textGenerationConfig: {
-                maxTokenCount: 300,
-                temperature: 0.5,
-                topP: 1,
+                maxTokenCount: 4096,
+                temperature: 0.7,
+                topP: 0.9,
                 stopSequences: []
             }
         };
 
         const command = new InvokeModelCommand({
-            modelId: "amazon.titan-text-premier-v1:0",
+            modelId: "amazon.titan-text-express-v1",
             contentType: "application/json",
             accept: "application/json",
             body: JSON.stringify(body)
@@ -125,34 +138,150 @@ app.post('/api/chat', async (req, res) => {
 // Load suggestions endpoint
 app.get('/api/loads/suggestions', async (req, res) => {
     try {
-        const prompt = "Given the current load in Kyiv, suggest optimal routes for delivery";
-        const aiSuggestions = await getAIResponse(prompt);
-        
-        const suggestions = {
-            ai_recommendation: aiSuggestions,
-            available_loads: [
-                {
-                    id: '1',
-                    type: 'Electronics',
-                    weight: 15,
-                    from: 'Kyiv, Ukraine',
-                    to: 'Lviv, Ukraine',
-                    distance: 540,
-                    urgent: true
-                },
-                {
-                    id: '2',
-                    type: 'Construction Materials',
-                    weight: 25,
-                    from: 'Odesa, Ukraine',
-                    to: 'Kharkiv, Ukraine',
-                    distance: 830,
-                    urgent: false
-                }
-            ]
+        const { currentCity, destinationCity } = req.query;
+        if (!currentCity) {
+            return res.status(400).json({ error: 'Current city is required' });
+        }
+
+        // Filter loads based on current city and destination city
+        const filteredLoads = loadsData.active_loads
+            .filter(load => {
+                const fromMatches = load.from.toLowerCase().replace(/ /g, '_') === currentCity.toLowerCase();
+                const toMatches = !destinationCity || load.to.toLowerCase().replace(/ /g, '_') === destinationCity.toLowerCase();
+                return fromMatches && toMatches;
+            })
+            .slice(0, 5); // Take only first 5 matches
+
+        // Create a smaller dataset for the AI
+        const filteredData = {
+            ...loadsData,
+            active_loads: filteredLoads
         };
 
-        res.json(suggestions);
+        // Create a prompt with filtered data
+        const prompt = `INSTRUCTIONS: You are a logistics optimization system. Return ONLY a JSON response matching the exact structure below. DO NOT include any other text or explanation.
+
+CONTEXT:
+- Current Location: ${currentCity}, Portugal
+${destinationCity ? `- Destination: ${destinationCity}, Portugal` : ''}
+- Available Loads: ${filteredLoads.length} loads filtered from ${loadsData.active_loads.length} total
+
+DATA:
+${JSON.stringify(filteredLoads, null, 2)}
+
+REQUIRED RESPONSE FORMAT - Return this exact JSON structure with appropriate values:
+{
+  "recommended_loads": [
+    {
+      "id": "string (use the load ID from data)",
+      "type": "string (use the load type from data)",
+      "weight": "number (use the load weight from data)",
+      "from": "string (use the load from city from data)",
+      "to": "string (use the load to city from data)",
+      "distance": "number (use the load distance from data)",
+      "urgent": "boolean (use the load urgent status from data)",
+      "estimated_time": "string (calculate based on distance, e.g., '2h 30m')",
+      "reason": "string (explain why this load is recommended)",
+      "route_conditions": "string (describe road conditions)",
+      "weather_impact": "string (describe weather impact)"
+    }
+  ],
+  "route_analysis": {
+    "total_distance": "number (sum of recommended load distances)",
+    "estimated_total_time": "string (sum of estimated times)",
+    "fuel_efficiency_rating": "number (1-10 scale)",
+    "route_complexity": "string (Low/Medium/High)",
+    "weather_considerations": "string (overall weather impact)",
+    "traffic_considerations": "string (overall traffic conditions)"
+  }
+}
+
+IMPORTANT:
+1. Return ONLY the JSON object above with no additional text
+2. Include ALL fields exactly as shown
+3. Use actual data from the provided loads
+4. Ensure the response is valid JSON
+{
+  "recommended_loads": [
+    {
+      "id": "string",
+      "type": "string",
+      "weight": number,
+      "from": "string",
+      "to": "string",
+      "distance": number,
+      "urgent": boolean,
+      "estimated_time": "string",
+      "reason": "string",
+      "route_conditions": "string",
+      "weather_impact": "string"
+    }
+  ],
+  "route_analysis": {
+    "total_distance": number,
+    "estimated_total_time": "string",
+    "fuel_efficiency_rating": number,
+    "route_complexity": "string",
+    "weather_considerations": "string",
+    "traffic_considerations": "string"
+  }
+}
+
+RESPONSE FORMAT: Return ONLY a JSON object in this exact format:
+{
+  "recommended_loads": [
+    {
+      "id": "string",
+      "type": "string",
+      "weight": number,
+      "from": "string",
+      "to": "string",
+      "distance": number,
+      "urgent": boolean,
+      "estimated_time": "string",
+      "reason": "string",
+      "route_conditions": "string",
+      "weather_impact": "string",
+      "fromLocation": { "lat": number, "lng": number },
+      "toLocation": { "lat": number, "lng": number }
+    }
+  ],
+  "route_analysis": {
+    "total_distance": number,
+    "estimated_total_time": "string",
+    "fuel_efficiency_rating": number,
+    "route_complexity": "string",
+    "weather_considerations": "string",
+    "traffic_considerations": "string"
+  }
+}
+
+Sort loads by: proximity to ${currentCity}, urgency, value-to-distance ratio, and conditions.
+Include only logistically efficient loads based on current location.
+REMEMBER: Return ONLY the JSON object, no other text.`;
+
+        // let aiSuggestions = await getAIResponse(prompt);
+        
+        // console.log('AI Suggestions:', aiSuggestions);
+        // Try to parse the AI response as JSON
+   
+        // Portuguese city coordinates for reference
+        const cityCoordinates = {
+            braga: { lat: 41.5517, lng: -8.4265 },
+            porto: { lat: 41.1579, lng: -8.6291 },
+            viseu: { lat: 40.6566, lng: -7.9125 },
+            coimbra: { lat: 40.2033, lng: -8.4103 },
+            lisboa: { lat: 38.7223, lng: -9.1393 },
+            setubal: { lat: 38.5244, lng: -8.8882 },
+            beja: { lat: 38.0333, lng: -7.8833 },
+            faro: { lat: 37.0193, lng: -7.9304 }
+        };
+
+        // Combine AI response with coordinates and additional data
+        // console.log('Parsed AI Response:', JSON.stringify(parsedResponse, null, 2));
+    
+
+        res.send(filteredData.active_loads);
     } catch (error) {
         console.error('Error getting load suggestions:', error);
         res.status(500).json({ 
